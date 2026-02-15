@@ -1,36 +1,33 @@
-# Streamlit Configuration
-# This file configures the Streamlit app appearance and behavior
+[global]
+developmentMode = false
 
 [server]
-# Server settings
 port = 8501
-headless = true
-runOnSave = false
 enableCORS = false
 enableXsrfProtection = true
+maxUploadSize = 200
 
 [browser]
-# Browser settings
 gatherUsageStats = false
 serverAddress = "localhost"
+serverPort = 8501
 
 [theme]
-# UI Theme - Professional Trading Platform Look
-primaryColor = "#1f77b4"
+primaryColor = "#667eea"
 backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f8f9fa"
-textColor = "#2c3e50"
+textColor = "#262730"
 font = "sans serif"
 
 [client]
-# Client settings
 showErrorDetails = true
 toolbarMode = "minimal"
 
 [runner]
-# Runner settings
 magicEnabled = true
-fastReruns = true
+installTracer = false
+fixMatplotlib = true
 
-# Note: For production deployment on Streamlit Cloud,
-# most of these settings are overridden by the cloud platform
+[logger]
+level = "info"
+messageFormat = "%(asctime)s %(levelname)s: %(message)s"
