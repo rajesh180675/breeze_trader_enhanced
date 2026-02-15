@@ -444,14 +444,17 @@ def show_login_page():
                     return
                 
                 with st.spinner("Connecting to Breeze API..."):
-                    creds = Credentials(api_key, api_secret, session_token)
-                    
                     try:
+                        # Create client and connect
                         client = BreezeAPIComplete()
                         result = client.connect(api_key, api_secret, session_token)
                         
                         if result["success"]:
-                            SessionState.login(creds, client)
+                            # Save credentials to session
+                            Credentials.save_runtime_credentials(api_key, api_secret, session_token)
+                            
+                            # Set authentication
+                            SessionState.set_authentication(True, client)
                             st.session_state["debug_mode"] = debug
                             
                             # Initialize risk monitor
@@ -1537,7 +1540,9 @@ def render_sidebar():
             
             # Logout
             if st.button("🚪 Logout", use_container_width=True):
-                SessionState.logout()
+                # Clear authentication
+                SessionState.set_authentication(False, None)
+                Credentials.clear_runtime_credentials()
                 st.rerun()
         
         # Footer

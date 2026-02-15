@@ -1,0 +1,61 @@
+# Breeze Options Trader PRO - Git Ignore File
+
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Database
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+data/breeze_trader.db
+
+# Logs
+logs/
+*.log
+
+# Environment Variables
+.env
+.env.local
+
+# Exports
+exports/
+*.csv
+*.xlsx
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+temp/
+tmp/
+
+# User-specific
+user_data/
+backups/
+
+# Distribution
+dist/
+build/
+*.egg-info/
