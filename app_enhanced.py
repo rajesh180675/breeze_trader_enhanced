@@ -63,8 +63,11 @@ from risk_monitor import RiskMonitor, Alert
 # IMPORT COMPLETE IMPLEMENTATIONS
 # ═══════════════════════════════════════════════════════════════
 
-from breeze_api_complete import BreezeAPIComplete
+from breeze_api_complete import CompleteBreezeClient
 from option_chain_processor import OptionChainProcessor
+
+# Alias for compatibility with rest of code
+BreezeAPIComplete = CompleteBreezeClient
 
 # Configure logging
 logging.basicConfig(
