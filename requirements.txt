@@ -1,18 +1,27 @@
-# Breeze Trader Enhanced - Dependencies
+# Breeze Trader PRO v9.0 - Dependencies
+
 # Core Framework
 streamlit>=1.54.0
-breeze-connect>=1.0.0
+breeze-connect>=1.0.65
 
 # Data Processing
 pandas>=2.0.0
 numpy>=1.24.0
 scipy>=1.10.0
 
+# Visualization
+plotly>=5.14.0
+
 # Utilities
 pytz>=2023.3
 pydantic>=2.0.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+tenacity>=8.2.0
 
-# Optional but recommended for production
-python-dotenv>=1.0.0  # For environment variables
-requests>=2.31.0  # Enhanced HTTP handling
-tenacity>=8.2.0  # Advanced retry logic
+# Database
+# SQLite is included with Python, no additional package needed
+
+# Optional (for advanced features)
+# websocket-client>=1.5.0  # For WebSocket streaming (optional)
+

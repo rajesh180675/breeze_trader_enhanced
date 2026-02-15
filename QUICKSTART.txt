@@ -1,0 +1,200 @@
+# ⚡ QUICK START GUIDE
+
+## Get Started in 3 Minutes!
+
+### Windows Users
+
+1. **Run Setup** (First time only)
+   ```
+   Double-click: setup.bat
+   Wait for installation to complete
+   ```
+
+2. **Start App**
+   ```
+   Double-click: run.bat
+   Browser opens automatically
+   ```
+
+3. **Login**
+   ```
+   Enter your Breeze API credentials
+   Click "Connect"
+   ```
+
+**That's it!** You're ready to trade.
+
+---
+
+### Linux/Mac Users
+
+1. **Run Setup** (First time only)
+   ```bash
+   ./setup.sh
+   ```
+
+2. **Start App**
+   ```bash
+   ./run.sh
+   ```
+
+3. **Login**
+   ```
+   Enter your Breeze API credentials
+   Click "Connect"
+   ```
+
+**That's it!** You're ready to trade.
+
+---
+
+## 🎯 First Steps After Login
+
+### 1. View Dashboard
+- See your account summary
+- Check available margin
+- Review positions
+
+### 2. Fetch Option Chain
+- Click "View Option Chain"
+- Select NIFTY
+- Choose expiry
+- Click "Fetch"
+
+### 3. Sell an Option (Carefully!)
+- Click "Sell Options"
+- Configure your trade
+- **Set stop loss** (important!)
+- Review summary
+- Place order
+
+---
+
+## ⚙️ Optional: Customize Settings
+
+Edit `user_config.py` to customize:
+
+```python
+TRADING = {
+    "default_order_type": "Limit",  # or "Market"
+    "enable_stoploss": True,        # Always prompt for SL
+}
+
+DISPLAY = {
+    "default_strike_range": "ATM ±10",  # Strike filtering
+    "show_greeks": True,                # Show Greeks
+}
+```
+
+Save and restart app.
+
+---
+
+## 🆘 Need Help?
+
+**Problem:** Can't connect
+**Solution:** 
+- Check credentials
+- Verify session token
+- Check internet
+
+**Problem:** No option chain
+**Solution:**
+- Try different strike range
+- Verify instrument/expiry
+- Check market hours
+
+**Problem:** App won't start
+**Solution:**
+- Run setup.bat/setup.sh again
+- Check Python is installed
+- See README_PRO.md
+
+---
+
+## 📚 Learn More
+
+- **README_PRO.md** - Complete documentation
+- **User config** - Customization options
+- **Debug mode** - Enable at login for troubleshooting
+
+---
+
+## 🔥 Pro Tips
+
+1. **Always set stop loss** when selling options
+2. **Use ATM ±10** for best option chain view
+3. **Enable auto-refresh** for live monitoring (optional)
+4. **Check PCR and Max Pain** before trading
+5. **Square off before 3:20 PM** on expiry day
+6. **Review analytics** daily to track performance
+
+---
+
+## 🎓 Key Features to Explore
+
+### Option Chain
+- Smart filtering (ATM ±5, ±10, ±20)
+- Live analytics (PCR, Max Pain, OI)
+- Greeks calculation
+- Export to CSV
+
+### Risk Management
+- Stop loss reminders
+- Margin estimates
+- Risk warnings
+- Position monitoring
+
+### Analytics
+- P&L trends
+- Win rate tracking
+- Performance by instrument
+- Trade history
+
+---
+
+## 🚨 Important Safety Rules
+
+1. ✅ **Always** set stop loss
+2. ✅ **Check** margin before trading
+3. ✅ **Review** order summary carefully
+4. ✅ **Monitor** positions regularly
+5. ✅ **Square off** risky positions early
+6. ❌ **Never** trade without understanding risk
+7. ❌ **Don't** overtrade
+8. ❌ **Avoid** trading during volatile news
+
+---
+
+## 📞 Emergency
+
+**If something goes wrong:**
+
+1. **Close all positions**
+   - Go to "Square Off"
+   - Select all
+   - Confirm square off
+
+2. **Log out**
+   - Click "Logout" in sidebar
+
+3. **Check trade history**
+   - Analytics → Trade History
+   - Verify all orders
+
+4. **Contact broker**
+   - If orders not reflecting
+   - For margin issues
+   - For technical problems
+
+---
+
+## 🎉 You're All Set!
+
+Start with small positions to get familiar with the platform.
+
+**Happy Trading! 📈**
+
+---
+
+*For detailed documentation, see README_PRO.md*

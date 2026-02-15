@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 rajesh180675
+Copyright (c) 2026 Breeze Options Trader PRO
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,97 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+===============================================================================
+ADDITIONAL TERMS AND CONDITIONS
+===============================================================================
+
+1. TRADING DISCLAIMER
+
+   Options trading involves substantial risk of loss and is not suitable for
+   all investors. The valuation of options may fluctuate, and, as a result,
+   clients may lose more than their original investment.
+
+   Past performance is not indicative of future results. The developers and
+   distributors of this software are not responsible for any financial losses
+   incurred through the use of this application.
+
+2. NO FINANCIAL ADVICE
+
+   This software is provided for informational and trading automation purposes
+   only. It does not constitute financial, investment, or trading advice.
+   Always consult with a qualified financial advisor before making trading
+   decisions.
+
+3. API TERMS
+
+   Use of this software is subject to the Terms and Conditions of the ICICI
+   Breeze API. Users must comply with all applicable API usage terms, rate
+   limits, and restrictions.
+
+4. DATA PRIVACY
+
+   This software stores trading data locally on your device. Users are
+   responsible for securing their API credentials and trading data. The
+   developers do not collect, store, or transmit any user data to external
+   servers.
+
+5. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED. IN NO EVENT SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+6. RISK ACKNOWLEDGMENT
+
+   By using this software, you acknowledge and accept that:
+   - Trading involves significant financial risk
+   - You are solely responsible for all trading decisions
+   - You understand the risks of options trading
+   - You have adequate knowledge and experience
+   - You will not hold the developers liable for any losses
+
+7. MODIFICATIONS
+
+   You may modify this software for personal use. Distribution of modified
+   versions must include attribution to the original authors and maintain
+   this license.
+
+8. SUPPORT
+
+   This software is provided without official support guarantees. While the
+   developers strive to maintain and improve the software, no service level
+   agreements or support commitments are implied.
+
+===============================================================================
+THIRD-PARTY LICENSES
+===============================================================================
+
+This software uses the following open-source packages:
+
+- Streamlit (Apache License 2.0)
+- Pandas (BSD 3-Clause License)
+- NumPy (BSD License)
+- Plotly (MIT License)
+- Breeze Connect (ICICI License)
+- Other dependencies as listed in requirements.txt
+
+All third-party licenses are respected and maintained.
+
+===============================================================================
+CONTACT
+===============================================================================
+
+For questions about licensing:
+- Review documentation in README_PRO.md
+- Check GitHub repository (if applicable)
+
+===============================================================================
+ACCEPTANCE
+===============================================================================
+
+By downloading, installing, or using this software, you agree to these terms
+and conditions.
+
+Last Updated: February 15, 2026
+Version: 9.0
