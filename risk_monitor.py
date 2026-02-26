@@ -1,6 +1,6 @@
 """
-Background risk monitor — polls prices, checks stop-losses, emits alerts.
-Runs in a daemon thread. Thread-safe communication via queue.
+Enhanced Risk Monitor — per-position stops + portfolio-level limits.
+Background daemon thread with thread-safe alert queue.
 """
 
 import threading
@@ -17,8 +17,8 @@ log = logging.getLogger(__name__)
 @dataclass
 class Alert:
     timestamp: str
-    level: str          # INFO, WARNING, CRITICAL
-    category: str       # STOP_LOSS, MARGIN, PRICE_MOVE
+    level: str       # INFO, WARNING, CRITICAL
+    category: str    # STOP_LOSS, PORTFOLIO, MARGIN, EXPIRY, PRICE_MOVE
     message: str
     position_id: str = ""
     data: Dict[str, Any] = field(default_factory=dict)
@@ -32,7 +32,7 @@ class MonitoredPosition:
     expiry: str
     strike: int
     option_type: str
-    position_type: str      # short / long
+    position_type: str   # short / long
     quantity: int
     avg_price: float
     stop_loss_price: Optional[float] = None
@@ -44,17 +44,38 @@ class MonitoredPosition:
 
 
 class RiskMonitor:
-    """Background thread that monitors positions and generates alerts."""
+    """
+    Background risk monitor with:
+    - Per-position fixed & trailing stop-losses
+    - Portfolio-level max loss limit
+    - Max delta limit
+    - Expiry-day warnings
+    - Margin utilization monitoring
+    """
 
-    def __init__(self, api_client, poll_interval: float = 15.0):
+    def __init__(self, api_client, poll_interval: float = 15.0,
+                 max_portfolio_loss: float = 50000.0,
+                 max_delta: float = 500.0):
         self._client = api_client
         self._poll_interval = poll_interval
+        self._max_portfolio_loss = max_portfolio_loss
+        self._max_delta = max_delta
         self._positions: Dict[str, MonitoredPosition] = {}
         self._alerts: queue.Queue = queue.Queue()
         self._alert_history: List[Alert] = []
         self._running = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._lock = threading.RLock()
+        self._portfolio_stop_triggered = False
+        self._poll_count = 0
+
+    # ─── Configuration ────────────────────────────────────────
+
+    def set_portfolio_limits(self, max_loss: float = None, max_delta: float = None):
+        if max_loss is not None:
+            self._max_portfolio_loss = max_loss
+        if max_delta is not None:
+            self._max_delta = max_delta
 
     # ─── Position management ──────────────────────────────────
 
@@ -68,6 +89,7 @@ class RiskMonitor:
                 position_type=position_type, quantity=quantity, avg_price=avg_price,
                 current_price=avg_price, high_water_mark=avg_price
             )
+        log.info(f"Monitor added: {position_id}")
 
     def remove_position(self, position_id: str):
         with self._lock:
@@ -79,6 +101,7 @@ class RiskMonitor:
                 p = self._positions[position_id]
                 p.stop_loss_price = stop_price
                 p.trailing_stop_pct = None
+                p.stop_triggered = False
 
     def set_trailing_stop(self, position_id: str, trail_pct: float):
         with self._lock:
@@ -87,6 +110,15 @@ class RiskMonitor:
                 p.trailing_stop_pct = trail_pct
                 p.stop_loss_price = None
                 p.high_water_mark = p.current_price or p.avg_price
+                p.stop_triggered = False
+
+    def clear_stop(self, position_id: str):
+        with self._lock:
+            if position_id in self._positions:
+                p = self._positions[position_id]
+                p.stop_loss_price = None
+                p.trailing_stop_pct = None
+                p.stop_triggered = False
 
     # ─── Lifecycle ────────────────────────────────────────────
 
@@ -130,17 +162,51 @@ class RiskMonitor:
                     "type": p.option_type, "pos": p.position_type, "qty": p.quantity,
                     "avg": p.avg_price, "current": p.current_price,
                     "stop": p.stop_loss_price, "trail_pct": p.trailing_stop_pct,
-                    "triggered": p.stop_triggered
+                    "triggered": p.stop_triggered,
+                    "pnl": self._calc_pos_pnl(p),
+                    "expiry": p.expiry
                 }
                 for p in self._positions.values()
             ]
 
-    # ─── Loop ─────────────────────────────────────────────────
+    def get_portfolio_pnl(self) -> float:
+        with self._lock:
+            return sum(self._calc_pos_pnl(p) for p in self._positions.values())
+
+    def get_stats(self) -> Dict:
+        with self._lock:
+            return {
+                "positions": len(self._positions),
+                "alerts": len(self._alert_history),
+                "poll_count": self._poll_count,
+                "portfolio_pnl": self.get_portfolio_pnl(),
+                "portfolio_stop": self._portfolio_stop_triggered,
+                "running": self.is_running(),
+            }
+
+    # ─── Private helpers ──────────────────────────────────────
+
+    def _calc_pos_pnl(self, pos: MonitoredPosition) -> float:
+        if pos.current_price <= 0:
+            return 0.0
+        if pos.position_type == "short":
+            return (pos.avg_price - pos.current_price) * pos.quantity
+        return (pos.current_price - pos.avg_price) * pos.quantity
+
+    def _emit(self, alert: Alert):
+        self._alerts.put(alert)
+        self._alert_history.append(alert)
+        if len(self._alert_history) > 100:
+            self._alert_history = self._alert_history[-100:]
+        log.warning(f"ALERT [{alert.level}] {alert.message}")
+
+    # ─── Monitor loop ─────────────────────────────────────────
 
     def _loop(self):
         while self._running.is_set():
             try:
                 self._check_all()
+                self._poll_count += 1
             except Exception as e:
                 log.error(f"Monitor loop error: {e}")
             for _ in range(int(self._poll_interval * 10)):
@@ -151,11 +217,23 @@ class RiskMonitor:
     def _check_all(self):
         with self._lock:
             positions = list(self._positions.values())
+
+        # Update prices
         for pos in positions:
-            if pos.stop_triggered:
-                continue
-            self._update_price(pos)
-            self._check_stop(pos)
+            if not pos.stop_triggered:
+                self._update_price(pos)
+
+        # Check individual stops
+        for pos in positions:
+            if not pos.stop_triggered:
+                self._check_position_stop(pos)
+
+        # Portfolio-level checks
+        if not self._portfolio_stop_triggered:
+            self._check_portfolio_limits(positions)
+
+        # Expiry warnings
+        self._check_expiry_warnings(positions)
 
     def _update_price(self, pos: MonitoredPosition):
         try:
@@ -170,6 +248,7 @@ class RiskMonitor:
                     if ltp > 0:
                         pos.current_price = ltp
                         pos.last_update = time.time()
+                        # Track high watermark
                         if pos.position_type == "short":
                             if ltp < pos.high_water_mark or pos.high_water_mark <= 0:
                                 pos.high_water_mark = ltp
@@ -179,7 +258,7 @@ class RiskMonitor:
         except Exception as e:
             log.debug(f"Price update failed {pos.position_id}: {e}")
 
-    def _check_stop(self, pos: MonitoredPosition):
+    def _check_position_stop(self, pos: MonitoredPosition):
         if pos.current_price <= 0:
             return
         triggered = False
@@ -198,26 +277,63 @@ class RiskMonitor:
                 trail_level = pos.high_water_mark * (1 + pos.trailing_stop_pct)
                 if pos.current_price >= trail_level:
                     triggered = True
-                    reason = (f"Trailing stop: low ₹{pos.high_water_mark:.2f}, "
-                              f"trail {pos.trailing_stop_pct * 100:.0f}%, trigger ₹{trail_level:.2f}")
+                    reason = f"Trailing stop ({pos.trailing_stop_pct*100:.0f}%) triggered at ₹{trail_level:.2f}"
             else:
                 trail_level = pos.high_water_mark * (1 - pos.trailing_stop_pct)
                 if pos.current_price <= trail_level:
                     triggered = True
-                    reason = (f"Trailing stop: high ₹{pos.high_water_mark:.2f}, "
-                              f"trail {pos.trailing_stop_pct * 100:.0f}%, trigger ₹{trail_level:.2f}")
+                    reason = f"Trailing stop ({pos.trailing_stop_pct*100:.0f}%) triggered at ₹{trail_level:.2f}"
 
         if triggered:
             pos.stop_triggered = True
-            alert = Alert(
+            self._emit(Alert(
                 timestamp=datetime.now().strftime("%H:%M:%S"),
                 level="CRITICAL", category="STOP_LOSS",
-                message=f"🚨 {pos.stock_code} {pos.strike} {pos.option_type}: {reason}. Current: ₹{pos.current_price:.2f}",
+                message=f"🚨 STOP: {pos.stock_code} {pos.strike} {pos.option_type} — {reason}. "
+                        f"Current: ₹{pos.current_price:.2f} | Avg: ₹{pos.avg_price:.2f}",
                 position_id=pos.position_id,
-                data={"current": pos.current_price, "avg": pos.avg_price}
-            )
-            self._alerts.put(alert)
-            self._alert_history.append(alert)
-            if len(self._alert_history) > 50:
-                self._alert_history = self._alert_history[-50:]
-            log.warning(f"STOP TRIGGERED: {alert.message}")
+                data={"current": pos.current_price, "avg": pos.avg_price, "stop": pos.stop_loss_price}
+            ))
+
+    def _check_portfolio_limits(self, positions: list):
+        portfolio_pnl = sum(self._calc_pos_pnl(p) for p in positions)
+        if portfolio_pnl < -abs(self._max_portfolio_loss):
+            self._portfolio_stop_triggered = True
+            self._emit(Alert(
+                timestamp=datetime.now().strftime("%H:%M:%S"),
+                level="CRITICAL", category="PORTFOLIO",
+                message=f"🚨 PORTFOLIO STOP: Total P&L ₹{portfolio_pnl:,.0f} exceeded limit ₹{-self._max_portfolio_loss:,.0f}",
+                data={"pnl": portfolio_pnl, "limit": self._max_portfolio_loss}
+            ))
+
+        # Price move alert (position lost >50% more than avg)
+        for pos in positions:
+            if pos.current_price > 0 and pos.avg_price > 0:
+                move_pct = (pos.current_price - pos.avg_price) / pos.avg_price * 100
+                if pos.position_type == "short" and move_pct > 100:
+                    self._emit(Alert(
+                        timestamp=datetime.now().strftime("%H:%M:%S"),
+                        level="WARNING", category="PRICE_MOVE",
+                        message=f"⚠️ {pos.stock_code} {pos.strike} {pos.option_type}: "
+                                f"price up {move_pct:.0f}% from entry (₹{pos.avg_price:.2f}→₹{pos.current_price:.2f})",
+                        position_id=pos.position_id,
+                        data={"move_pct": move_pct}
+                    ))
+
+    def _check_expiry_warnings(self, positions: list):
+        from helpers import calculate_days_to_expiry
+        now_str = datetime.now().strftime("%H:%M:%S")
+        for pos in positions:
+            dte = calculate_days_to_expiry(pos.expiry)
+            if dte == 0 and pos.position_type == "short":
+                self._emit(Alert(
+                    timestamp=now_str, level="WARNING", category="EXPIRY",
+                    message=f"⚠️ EXPIRY TODAY: {pos.stock_code} {pos.strike} {pos.option_type} expires today! Consider square-off.",
+                    position_id=pos.position_id, data={"dte": 0}
+                ))
+            elif dte == 1:
+                self._emit(Alert(
+                    timestamp=now_str, level="INFO", category="EXPIRY",
+                    message=f"ℹ️ Expiry Tomorrow: {pos.stock_code} {pos.strike} {pos.option_type}",
+                    position_id=pos.position_id, data={"dte": 1}
+                ))

@@ -1,6 +1,5 @@
 """
 Helpers — type conversion, API response parsing, option chain processing, formatting.
-Imports analytics for Greek calculations on chain data.
 """
 
 import pandas as pd
@@ -52,16 +51,12 @@ def safe_str(value: Any, default: str = "") -> str:
 # ═══════════════════════════════════════════════════════════════
 
 class APIResponse:
-    """Parse ICICI Breeze response into clean accessors."""
-
     def __init__(self, raw_response: Dict[str, Any]):
         self.raw = raw_response
         self.success = raw_response.get("success", False)
         self.message = raw_response.get("message", "")
         self._data = raw_response.get("data", {})
-        self._success_data = (
-            self._data.get("Success") if isinstance(self._data, dict) else None
-        )
+        self._success_data = self._data.get("Success") if isinstance(self._data, dict) else None
 
     @property
     def data(self) -> Dict:
@@ -144,9 +139,45 @@ def calculate_pnl(position_type: str, avg_price: float,
     return (current_price - avg_price) * qty
 
 
+def get_pnl_color(pnl: float) -> str:
+    return "#28a745" if pnl >= 0 else "#dc3545"
+
+
+def enrich_positions(positions: list) -> list:
+    """Add computed fields to positions list."""
+    enriched = []
+    for p in positions:
+        pt = detect_position_type(p)
+        qty = abs(safe_int(p.get("quantity", 0)))
+        avg = safe_float(p.get("average_price", 0))
+        ltp = safe_float(p.get("ltp", avg))
+        pnl = calculate_pnl(pt, avg, ltp, qty)
+        pnl_pct = ((ltp - avg) / avg * 100) if avg > 0 else 0
+        if pt == "short":
+            pnl_pct = -pnl_pct
+        enriched.append({
+            **p,
+            "_pt": pt,
+            "_qty": qty,
+            "_avg": avg,
+            "_ltp": ltp,
+            "_pnl": pnl,
+            "_pnl_pct": pnl_pct,
+            "_close": get_closing_action(pt),
+        })
+    return enriched
+
+
 # ═══════════════════════════════════════════════════════════════
 # OPTION CHAIN
 # ═══════════════════════════════════════════════════════════════
+
+NUMERIC_COLS = [
+    "strike_price", "ltp", "best_bid_price", "best_offer_price",
+    "open", "high", "low", "close", "volume", "open_interest",
+    "ltp_percent_change", "oi_change", "iv", "bid_qty", "offer_qty"
+]
+
 
 def process_option_chain(raw_data: Dict) -> pd.DataFrame:
     if not raw_data or "Success" not in raw_data:
@@ -157,12 +188,7 @@ def process_option_chain(raw_data: Dict) -> pd.DataFrame:
     df = pd.DataFrame(records)
     if df.empty:
         return df
-    numeric_cols = [
-        "strike_price", "ltp", "best_bid_price", "best_offer_price",
-        "open", "high", "low", "close", "volume", "open_interest",
-        "ltp_percent_change", "oi_change", "iv"
-    ]
-    for col in numeric_cols:
+    for col in NUMERIC_COLS:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     if "right" in df.columns:
@@ -174,8 +200,10 @@ def create_pivot_table(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "strike_price" not in df.columns or "right" not in df.columns:
         return pd.DataFrame()
     pivot_fields = {
-        "open_interest": "OI", "volume": "Vol", "ltp": "LTP",
-        "best_bid_price": "Bid", "best_offer_price": "Ask"
+        "open_interest": "OI", "oi_change": "ΔOI",
+        "volume": "Vol", "ltp": "LTP",
+        "best_bid_price": "Bid", "best_offer_price": "Ask",
+        "iv": "IV%"
     }
     available = {k: v for k, v in pivot_fields.items() if k in df.columns}
     if not available:
@@ -235,13 +263,12 @@ def estimate_atm_strike(df: pd.DataFrame) -> float:
     return float(combined["diff"].idxmin())
 
 
-def add_greeks_to_chain(df: pd.DataFrame, spot_price: float,
-                        expiry_date: str) -> pd.DataFrame:
+def add_greeks_to_chain(df: pd.DataFrame, spot_price: float, expiry_date: str) -> pd.DataFrame:
     if df.empty:
         return df
     try:
-        expiry = datetime.strptime(expiry_date, "%Y-%m-%d")
-        tte = max((expiry - datetime.now(C.IST).replace(tzinfo=None)).days / C.DAYS_PER_YEAR, 0.001)
+        expiry = datetime.strptime(expiry_date[:10], "%Y-%m-%d")
+        tte = max((expiry - datetime.now()).days / C.DAYS_PER_YEAR, 0.001)
     except Exception:
         tte = 0.05
     greeks_list = []
@@ -269,20 +296,8 @@ def add_greeks_to_chain(df: pd.DataFrame, spot_price: float,
 # ═══════════════════════════════════════════════════════════════
 
 def get_market_status() -> str:
-    now = datetime.now(C.IST)
-    if now.weekday() >= 5:
-        return "🔴 Closed (Weekend)"
-    o = now.replace(hour=C.MARKET_OPEN[0], minute=C.MARKET_OPEN[1], second=0, microsecond=0)
-    c = now.replace(hour=C.MARKET_CLOSE[0], minute=C.MARKET_CLOSE[1], second=0, microsecond=0)
-    p = now.replace(hour=C.MARKET_PRE_OPEN_START[0], minute=C.MARKET_PRE_OPEN_START[1],
-                    second=0, microsecond=0)
-    if now < p:
-        return "🟡 Pre-Market"
-    if now < o:
-        return "🟠 Pre-Open"
-    if now <= c:
-        return "🟢 Market Open"
-    return "🔴 Closed"
+    ms = C.get_market_status()
+    return ms["label"]
 
 
 def format_currency(value: float) -> str:
@@ -297,10 +312,28 @@ def format_currency(value: float) -> str:
     return f"{sign}₹{av:.2f}"
 
 
+def format_number(value: float, decimals: int = 0) -> str:
+    """Format number with Indian comma system."""
+    if abs(value) >= 1e7:
+        return f"{value / 1e7:.2f}Cr"
+    if abs(value) >= 1e5:
+        return f"{value / 1e5:.2f}L"
+    return f"{value:,.{decimals}f}"
+
+
 def format_expiry(date_str: str) -> str:
     for fmt in ["%Y-%m-%d", "%d-%b-%Y", "%d-%B-%Y"]:
         try:
             return datetime.strptime(date_str, fmt).strftime("%d %b %Y (%A)")
+        except ValueError:
+            continue
+    return date_str
+
+
+def format_expiry_short(date_str: str) -> str:
+    for fmt in ["%Y-%m-%d", "%d-%b-%Y", "%d-%B-%Y"]:
+        try:
+            return datetime.strptime(date_str, fmt).strftime("%d %b")
         except ValueError:
             continue
     return date_str
@@ -312,7 +345,12 @@ def calculate_days_to_expiry(expiry_date: str) -> int:
     for fmt in ["%Y-%m-%d", "%d-%b-%Y", "%d-%B-%Y", "%Y-%m-%dT%H:%M:%S"]:
         try:
             expiry = datetime.strptime(expiry_date.strip()[:10], fmt[:len(expiry_date.strip()[:10])])
-            return max(0, (expiry - datetime.now(C.IST).replace(tzinfo=None)).days)
+            return max(0, (expiry - datetime.now()).days)
         except ValueError:
             continue
     return 0
+
+
+def pnl_badge(value: float) -> str:
+    color = "#28a745" if value >= 0 else "#dc3545"
+    return f'<span style="color:{color};font-weight:700">{format_currency(value)}</span>'
